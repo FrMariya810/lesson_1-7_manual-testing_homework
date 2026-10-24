@@ -12,8 +12,27 @@ export function reportIncident(type, reason) {
   document.querySelector('#incident-count').textContent = String(list.children.length);
 }
 
+let refreshTimes = [];
+
 // События: startup, refresh, submit, decoy. Условия ловушек добавьте здесь.
 export function checkActivity(action, details = {}) {
+  if (action === 'refresh') {
+    const now = Date.now();
+
+    refreshTimes = refreshTimes.filter(
+      time => now - time < 5000
+    );
+
+    refreshTimes.push(now);
+
+    if (refreshTimes.length === 6) {
+      reportIncident(
+        'T1',
+        'Шесть попыток обновить список за последние 5 секунд'
+      );
+    }
+  }
+
   if (action === 'submit' && details.supportCode) {
     reportIncident(
       'T2',
@@ -90,6 +109,7 @@ export function initializeSecurity() {
 }
 
 export function resetSecurity() {
+  refreshTimes = [];
   try {
     for (const key of Object.keys(localStorage)) {
       if (key.startsWith(PREFIX) && key !== `${PREFIX}applications`) localStorage.removeItem(key);

@@ -8,6 +8,7 @@ const names = { html: 'HTML и CSS', javascript: 'JavaScript и DOM', api: 'HTTP
 let applications = [];
 let selectedId = null;
 let revision = 0;
+let isSubmitting = false;
 
 function setFormStatus(text, state = 'idle') {
   const status = document.querySelector('#form-status');
@@ -102,11 +103,13 @@ async function loadApplications() {
 
 form.addEventListener('submit', async event => {
   event.preventDefault();
+  if (isSubmitting) return;
   const data = new FormData(form);
   const values = { name: String(data.get('name') || '').trim(), topic: String(data.get('topic') || ''), comment: String(data.get('comment') || '') };
   if (!permitted('submit', { topic: values.topic, supportCode: String(data.get('supportCode') || '') })) return;
   const error = validate(values);
   if (error) { setFormStatus(error, 'error'); return; }
+  isSubmitting = true;
   const currentRevision = revision;
   setFormStatus('Отправляем заявку…', 'pending');
   form.setAttribute('aria-busy', 'true');
@@ -120,7 +123,10 @@ form.addEventListener('submit', async event => {
   } catch (error) {
     if (currentRevision === revision) setFormStatus(error.message || 'Не удалось отправить заявку.', 'error');
   } finally {
-    if (currentRevision === revision) form.setAttribute('aria-busy', 'false');
+    if (currentRevision === revision) {
+    isSubmitting = false;
+    form.setAttribute('aria-busy', 'false');
+  }
   }
 });
 
@@ -153,6 +159,7 @@ document.querySelector('#staff-export').addEventListener('click', () => checkAct
 
 document.querySelector('#reset-lab').addEventListener('click', async () => {
   revision += 1;
+  isSubmitting = false;
   resetSecurity();
   resetData();
   selectedId = null;

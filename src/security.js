@@ -20,6 +20,12 @@ export function checkActivity(action, details = {}) {
       'При отправке заполнено скрытое поле supportCode'
     );
   }
+  if (action === 'decoy') {
+  reportIncident(
+    'T3',
+    'Вызвана скрытая кнопка staff-export'
+  );
+}
 }
 
 // Приложение вызывает эту функцию перед отправкой и обновлением списка.

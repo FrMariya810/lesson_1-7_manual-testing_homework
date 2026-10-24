@@ -20,7 +20,7 @@ export function checkActivity(action, details = {}) {
       'При отправке заполнено скрытое поле supportCode'
     );
   }
-  
+
   if (action === 'decoy') {
     reportIncident(
       'T3',
@@ -39,28 +39,40 @@ export function checkActivity(action, details = {}) {
     );
   }
   if (action === 'startup') {
-  let marker = null;
+    let marker = null;
 
-  try {
-    marker = JSON.parse(localStorage.getItem(CANARY_KEY));
-  } catch {
-  }
-
-  if (marker?.role === 'admin') {
     try {
-      localStorage.setItem(
-        CANARY_KEY,
-        JSON.stringify({ role: 'visitor' })
-      );
+      marker = JSON.parse(localStorage.getItem(CANARY_KEY));
     } catch {
     }
 
-    reportIncident(
-      'T5',
-      'Обнаружена подмена маркера: role admin'
-    );
+    if (marker?.role === 'admin') {
+      try {
+        localStorage.setItem(
+          CANARY_KEY,
+          JSON.stringify({ role: 'visitor' })
+        );
+      } catch {
+      }
+
+      reportIncident(
+        'T5',
+        'Обнаружена подмена маркера: role admin'
+      );
+    }
+
+    const url = new URL(window.location.href);
+
+    if (url.searchParams.getAll('staff').includes('1')) {
+      url.searchParams.delete('staff');
+      window.history.replaceState(null, '', url.href);
+
+      reportIncident(
+        'T6',
+        'В адресе обнаружен параметр staff=1'
+      );
+    }
   }
-}
 }
 
 // Приложение вызывает эту функцию перед отправкой и обновлением списка.

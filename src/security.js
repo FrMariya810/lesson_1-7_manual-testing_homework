@@ -20,12 +20,14 @@ export function checkActivity(action, details = {}) {
       'При отправке заполнено скрытое поле supportCode'
     );
   }
+  
   if (action === 'decoy') {
     reportIncident(
       'T3',
       'Вызвана скрытая кнопка staff-export'
     );
   }
+
   if (
     action === 'submit' &&
     details.topic &&
@@ -36,6 +38,29 @@ export function checkActivity(action, details = {}) {
       'При отправке получено недопустимое направление'
     );
   }
+  if (action === 'startup') {
+  let marker = null;
+
+  try {
+    marker = JSON.parse(localStorage.getItem(CANARY_KEY));
+  } catch {
+  }
+
+  if (marker?.role === 'admin') {
+    try {
+      localStorage.setItem(
+        CANARY_KEY,
+        JSON.stringify({ role: 'visitor' })
+      );
+    } catch {
+    }
+
+    reportIncident(
+      'T5',
+      'Обнаружена подмена маркера: role admin'
+    );
+  }
+}
 }
 
 // Приложение вызывает эту функцию перед отправкой и обновлением списка.

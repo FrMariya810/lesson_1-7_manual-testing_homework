@@ -21,11 +21,21 @@ export function checkActivity(action, details = {}) {
     );
   }
   if (action === 'decoy') {
-  reportIncident(
-    'T3',
-    'Вызвана скрытая кнопка staff-export'
-  );
-}
+    reportIncident(
+      'T3',
+      'Вызвана скрытая кнопка staff-export'
+    );
+  }
+  if (
+    action === 'submit' &&
+    details.topic &&
+    !['html', 'javascript', 'api'].includes(details.topic)
+  ) {
+    reportIncident(
+      'T4',
+      'При отправке получено недопустимое направление'
+    );
+  }
 }
 
 // Приложение вызывает эту функцию перед отправкой и обновлением списка.

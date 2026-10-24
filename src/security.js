@@ -5,6 +5,10 @@ export const CANARY_KEY = `${PREFIX}canary`;
 const INCIDENTS_KEY = `${PREFIX}incidents`;
 let incidents = [];
 
+let blockedUntil = 0;
+let restrictionReason = '';
+let restrictionTimer = null;
+
 function renderIncidents() {
   const list = document.querySelector('#incident-list');
   list.replaceChildren();
@@ -44,6 +48,8 @@ export function reportIncident(type, reason) {
   }
 
   renderIncidents();
+  startRestriction(reason);
+
 }
 
 let refreshTimes = [];
@@ -130,7 +136,46 @@ export function checkActivity(action, details = {}) {
 
 // Приложение вызывает эту функцию перед отправкой и обновлением списка.
 export function isRestricted() {
-  return false;
+  return Date.now() < blockedUntil;
+}
+
+function renderRestriction() {
+  const restricted = isRestricted();
+
+  document.querySelector('#submit-button').disabled = restricted;
+  document.querySelector('#refresh-button').disabled = restricted;
+
+  const status = document.querySelector('#security-status');
+  const detail = document.querySelector('#restriction-detail');
+
+  detail.hidden = !restricted;
+
+  if (restricted) {
+    const seconds = Math.ceil((blockedUntil - Date.now()) / 1000);
+
+    status.textContent = `Ограничение: осталось ${seconds} с`;
+    detail.textContent = restrictionReason;
+  } else {
+    status.textContent = 'Ограничений нет';
+    detail.textContent = '';
+
+    clearInterval(restrictionTimer);
+    restrictionTimer = null;
+    blockedUntil = 0;
+    restrictionReason = '';
+  }
+}
+
+function startRestriction(reason) {
+  if (isRestricted()) return;
+
+  blockedUntil = Date.now() + 30_000;
+  restrictionReason = reason;
+
+  clearInterval(restrictionTimer);
+  restrictionTimer = setInterval(renderRestriction, 250);
+
+  renderRestriction();
 }
 
 export function initializeSecurity() {
@@ -161,6 +206,13 @@ export function initializeSecurity() {
 }
 
 export function resetSecurity() {
+  clearInterval(restrictionTimer);
+  restrictionTimer = null;
+  blockedUntil = 0;
+  restrictionReason = '';
+
+  document.querySelector('#submit-button').disabled = false;
+  document.querySelector('#refresh-button').disabled = false;
   refreshTimes = [];
   incidents = [];
   try {

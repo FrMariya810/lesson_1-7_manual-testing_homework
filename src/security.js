@@ -2,35 +2,260 @@ import { PREFIX } from './api.js';
 
 export const CANARY_KEY = `${PREFIX}canary`;
 
+const INCIDENTS_KEY = `${PREFIX}incidents`;
+let incidents = [];
+
+const RESTRICTION_KEY = `${PREFIX}restriction`;
+
+let blockedUntil = 0;
+let restrictionReason = '';
+let restrictionTimer = null;
+
+function renderIncidents() {
+  const list = document.querySelector('#incident-list');
+  list.replaceChildren();
+
+  for (const incident of incidents) {
+    const item = document.createElement('li');
+    const time = new Date(incident.time).toLocaleString('ru-RU');
+
+    item.textContent =
+      `${time} — ${incident.type}: ${incident.reason}`;
+
+    list.append(item);
+  }
+
+  document.querySelector('#incident-count').textContent =
+    String(incidents.length);
+  document.querySelector('#incidents-empty').hidden =
+    incidents.length > 0;
+}
+
 // Временный вывод для проверки ловушек. Постоянный журнал добавляется в бонусе.
 export function reportIncident(type, reason) {
-  const list = document.querySelector('#incident-list');
-  const item = document.createElement('li');
-  item.textContent = `${type}: ${reason}`;
-  list.prepend(item);
-  document.querySelector('#incidents-empty').hidden = true;
-  document.querySelector('#incident-count').textContent = String(list.children.length);
+  incidents.unshift({
+    time: new Date().toISOString(),
+    type,
+    reason
+  });
+
+  incidents = incidents.slice(0, 30);
+
+  try {
+    localStorage.setItem(
+      INCIDENTS_KEY,
+      JSON.stringify(incidents)
+    );
+  } catch {
+  }
+
+  renderIncidents();
+  startRestriction(reason);
+
 }
+
+let refreshTimes = [];
 
 // События: startup, refresh, submit, decoy. Условия ловушек добавьте здесь.
 export function checkActivity(action, details = {}) {
+  if (action === 'refresh') {
+    const now = Date.now();
+
+    refreshTimes = refreshTimes.filter(
+      time => now - time < 5000
+    );
+
+    refreshTimes.push(now);
+
+    if (refreshTimes.length === 6) {
+      reportIncident(
+        'T1',
+        'Шесть попыток обновить список за последние 5 секунд'
+      );
+    }
+  }
+
+  if (action === 'submit' && details.supportCode) {
+    reportIncident(
+      'T2',
+      'При отправке заполнено скрытое поле supportCode'
+    );
+  }
+
+  if (action === 'decoy') {
+    reportIncident(
+      'T3',
+      'Вызвана скрытая кнопка staff-export'
+    );
+  }
+
+  if (
+    action === 'submit' &&
+    details.topic &&
+    !['html', 'javascript', 'api'].includes(details.topic)
+  ) {
+    reportIncident(
+      'T4',
+      'При отправке получено недопустимое направление'
+    );
+  }
+  if (action === 'startup') {
+    let marker = null;
+
+    try {
+      marker = JSON.parse(localStorage.getItem(CANARY_KEY));
+    } catch {
+    }
+
+    if (marker?.role === 'admin') {
+      try {
+        localStorage.setItem(
+          CANARY_KEY,
+          JSON.stringify({ role: 'visitor' })
+        );
+      } catch {
+      }
+
+      reportIncident(
+        'T5',
+        'Обнаружена подмена маркера: role admin'
+      );
+    }
+
+    const url = new URL(window.location.href);
+
+    if (url.searchParams.getAll('staff').includes('1')) {
+      url.searchParams.delete('staff');
+      window.history.replaceState(null, '', url.href);
+
+      reportIncident(
+        'T6',
+        'В адресе обнаружен параметр staff=1'
+      );
+    }
+  }
 }
 
 // Приложение вызывает эту функцию перед отправкой и обновлением списка.
 export function isRestricted() {
-  return false;
+  return Date.now() < blockedUntil;
+}
+
+function renderRestriction() {
+  const restricted = isRestricted();
+
+  document.querySelector('#submit-button').disabled = restricted;
+  document.querySelector('#refresh-button').disabled = restricted;
+
+  const status = document.querySelector('#security-status');
+  const detail = document.querySelector('#restriction-detail');
+
+  detail.hidden = !restricted;
+
+  if (restricted) {
+    const seconds = Math.ceil((blockedUntil - Date.now()) / 1000);
+
+    status.textContent = `Ограничение: осталось ${seconds} с`;
+    detail.textContent = restrictionReason;
+  } else {
+    status.textContent = 'Ограничений нет';
+    detail.textContent = '';
+
+    clearInterval(restrictionTimer);
+    restrictionTimer = null;
+    blockedUntil = 0;
+    restrictionReason = '';
+    try {
+      localStorage.removeItem(RESTRICTION_KEY);
+    } catch {
+    }
+  }
+}
+
+function startRestriction(reason) {
+  if (isRestricted()) return;
+
+  blockedUntil = Date.now() + 30_000;
+  restrictionReason = reason;
+  try {
+    localStorage.setItem(
+      RESTRICTION_KEY,
+      JSON.stringify({
+        blockedUntil,
+        reason: restrictionReason
+      })
+    );
+  } catch {
+  }
+
+  clearInterval(restrictionTimer);
+  restrictionTimer = setInterval(renderRestriction, 250);
+
+  renderRestriction();
 }
 
 export function initializeSecurity() {
+    try {
+    const saved = JSON.parse(localStorage.getItem(INCIDENTS_KEY));
+
+    incidents = Array.isArray(saved)
+      ? saved.filter(item =>
+          item &&
+          typeof item.time === 'string' &&
+          Number.isFinite(Date.parse(item.time)) &&
+          typeof item.type === 'string' &&
+          typeof item.reason === 'string'
+        ).slice(0, 30)
+      : [];
+  } catch {
+    incidents = [];
+  }
+
+  renderIncidents();
+
   try {
     if (localStorage.getItem(CANARY_KEY) === null) {
       localStorage.setItem(CANARY_KEY, JSON.stringify({ role: 'visitor' }));
     }
   } catch { /* Бонус должен учитывать недоступное хранилище. */ }
+  try {
+    const saved = JSON.parse(
+      localStorage.getItem(RESTRICTION_KEY)
+    );
+
+    if (
+      saved &&
+      Number.isFinite(saved.blockedUntil) &&
+      saved.blockedUntil > Date.now() &&
+      typeof saved.reason === 'string'
+    ) {
+      blockedUntil = saved.blockedUntil;
+      restrictionReason = saved.reason;
+    }
+  } catch {
+  }
+
+  clearInterval(restrictionTimer);
+  restrictionTimer = null;
+
+  if (isRestricted()) {
+    restrictionTimer = setInterval(renderRestriction, 250);
+  }
+
+  renderRestriction();
   checkActivity('startup');
 }
 
 export function resetSecurity() {
+  clearInterval(restrictionTimer);
+  restrictionTimer = null;
+  blockedUntil = 0;
+  restrictionReason = '';
+
+  document.querySelector('#submit-button').disabled = false;
+  document.querySelector('#refresh-button').disabled = false;
+  refreshTimes = [];
+  incidents = [];
   try {
     for (const key of Object.keys(localStorage)) {
       if (key.startsWith(PREFIX) && key !== `${PREFIX}applications`) localStorage.removeItem(key);

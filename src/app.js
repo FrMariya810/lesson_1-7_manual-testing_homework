@@ -8,6 +8,7 @@ const names = { html: 'HTML и CSS', javascript: 'JavaScript и DOM', api: 'HTTP
 let applications = [];
 let selectedId = null;
 let revision = 0;
+let isSubmitting = false;
 
 function setFormStatus(text, state = 'idle') {
   const status = document.querySelector('#form-status');
@@ -29,7 +30,7 @@ function validate(values) {
 }
 
 function renderComment(element, text) {
-  element.innerHTML = text || 'Без комментария';
+  element.textContent = text || 'Без комментария';
 }
 
 function renderSelection() {
@@ -46,7 +47,7 @@ function renderApplications() {
   const visible = applications.filter(item => filter.value === 'all' || item.topic === filter.value);
   const focusedId = document.activeElement?.closest('.application-card')?.dataset.id;
   list.replaceChildren();
-  document.querySelector('#application-count').textContent = String(applications.length);
+  document.querySelector('#application-count').textContent = String(visible.length);
   document.querySelector('#empty-state').hidden = visible.length > 0;
 
   for (const application of visible) {
@@ -76,8 +77,7 @@ function renderApplications() {
     arrow.setAttribute('aria-hidden', 'true');
     body.append(name, topic, comment);
     card.append(index, body, arrow);
-    card.addEventListener('click', event => {
-      if (event.target !== card) return;
+    card.addEventListener('click', () => {
       selectedId = application.id;
       renderApplications();
     });
@@ -103,11 +103,13 @@ async function loadApplications() {
 
 form.addEventListener('submit', async event => {
   event.preventDefault();
+  if (isSubmitting) return;
   const data = new FormData(form);
-  const values = { name: String(data.get('name') || ''), topic: String(data.get('topic') || ''), comment: String(data.get('comment') || '') };
+  const values = { name: String(data.get('name') || '').trim(), topic: String(data.get('topic') || ''), comment: String(data.get('comment') || '') };
   if (!permitted('submit', { topic: values.topic, supportCode: String(data.get('supportCode') || '') })) return;
   const error = validate(values);
   if (error) { setFormStatus(error, 'error'); return; }
+  isSubmitting = true;
   const currentRevision = revision;
   setFormStatus('Отправляем заявку…', 'pending');
   form.setAttribute('aria-busy', 'true');
@@ -115,13 +117,20 @@ form.addEventListener('submit', async event => {
     const response = await createApplication({ ...values, name: values.name.trim() });
     const result = await response.json();
     if (currentRevision !== revision) return;
+    if (!response.ok) {
+      throw new Error(result.error?.message || 'Не удалось отправить заявку.');
+    }
     setFormStatus('Заявка сохранена. Спасибо!', 'success');
     form.reset();
+    document.querySelector('#support-code').value = '';
     await loadApplications();
   } catch (error) {
     if (currentRevision === revision) setFormStatus(error.message || 'Не удалось отправить заявку.', 'error');
   } finally {
-    if (currentRevision === revision) form.setAttribute('aria-busy', 'false');
+    if (currentRevision === revision) {
+    isSubmitting = false;
+    form.setAttribute('aria-busy', 'false');
+  }
   }
 });
 
@@ -137,6 +146,9 @@ document.querySelector('#refresh-button').addEventListener('click', () => {
 
 document.querySelector('#reset-interface').addEventListener('click', () => {
   form.reset();
+  document.querySelector('#support-code').value = '';
+  selectedId = null;
+  filter.value = 'all'
   setFormStatus('Интерфейс сброшен.');
   renderApplications();
 });
@@ -152,11 +164,13 @@ document.querySelector('#staff-export').addEventListener('click', () => checkAct
 
 document.querySelector('#reset-lab').addEventListener('click', async () => {
   revision += 1;
+  isSubmitting = false;
   resetSecurity();
   resetData();
   selectedId = null;
   filter.value = 'all';
   form.reset();
+  document.querySelector('#support-code').value = '';
   form.setAttribute('aria-busy', 'false');
   document.querySelector('#service-mode').value = 'normal';
   document.querySelector('#lab-status').textContent = getStorageProblem() || 'Исходные данные восстановлены.';

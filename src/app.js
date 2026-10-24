@@ -122,6 +122,7 @@ form.addEventListener('submit', async event => {
     }
     setFormStatus('Заявка сохранена. Спасибо!', 'success');
     form.reset();
+    document.querySelector('#support-code').value = '';
     await loadApplications();
   } catch (error) {
     if (currentRevision === revision) setFormStatus(error.message || 'Не удалось отправить заявку.', 'error');
@@ -145,6 +146,7 @@ document.querySelector('#refresh-button').addEventListener('click', () => {
 
 document.querySelector('#reset-interface').addEventListener('click', () => {
   form.reset();
+  document.querySelector('#support-code').value = '';
   selectedId = null;
   filter.value = 'all'
   setFormStatus('Интерфейс сброшен.');
@@ -168,6 +170,7 @@ document.querySelector('#reset-lab').addEventListener('click', async () => {
   selectedId = null;
   filter.value = 'all';
   form.reset();
+  document.querySelector('#support-code').value = '';
   form.setAttribute('aria-busy', 'false');
   document.querySelector('#service-mode').value = 'normal';
   document.querySelector('#lab-status').textContent = getStorageProblem() || 'Исходные данные восстановлены.';

@@ -14,6 +14,12 @@ export function reportIncident(type, reason) {
 
 // События: startup, refresh, submit, decoy. Условия ловушек добавьте здесь.
 export function checkActivity(action, details = {}) {
+  if (action === 'submit' && details.supportCode) {
+    reportIncident(
+      'T2',
+      'При отправке заполнено скрытое поле supportCode'
+    );
+  }
 }
 
 // Приложение вызывает эту функцию перед отправкой и обновлением списка.

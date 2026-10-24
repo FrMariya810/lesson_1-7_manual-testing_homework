@@ -5,6 +5,8 @@ export const CANARY_KEY = `${PREFIX}canary`;
 const INCIDENTS_KEY = `${PREFIX}incidents`;
 let incidents = [];
 
+const RESTRICTION_KEY = `${PREFIX}restriction`;
+
 let blockedUntil = 0;
 let restrictionReason = '';
 let restrictionTimer = null;
@@ -163,6 +165,10 @@ function renderRestriction() {
     restrictionTimer = null;
     blockedUntil = 0;
     restrictionReason = '';
+    try {
+      localStorage.removeItem(RESTRICTION_KEY);
+    } catch {
+    }
   }
 }
 
@@ -171,6 +177,16 @@ function startRestriction(reason) {
 
   blockedUntil = Date.now() + 30_000;
   restrictionReason = reason;
+  try {
+    localStorage.setItem(
+      RESTRICTION_KEY,
+      JSON.stringify({
+        blockedUntil,
+        reason: restrictionReason
+      })
+    );
+  } catch {
+  }
 
   clearInterval(restrictionTimer);
   restrictionTimer = setInterval(renderRestriction, 250);
@@ -202,6 +218,31 @@ export function initializeSecurity() {
       localStorage.setItem(CANARY_KEY, JSON.stringify({ role: 'visitor' }));
     }
   } catch { /* Бонус должен учитывать недоступное хранилище. */ }
+  try {
+    const saved = JSON.parse(
+      localStorage.getItem(RESTRICTION_KEY)
+    );
+
+    if (
+      saved &&
+      Number.isFinite(saved.blockedUntil) &&
+      saved.blockedUntil > Date.now() &&
+      typeof saved.reason === 'string'
+    ) {
+      blockedUntil = saved.blockedUntil;
+      restrictionReason = saved.reason;
+    }
+  } catch {
+  }
+
+  clearInterval(restrictionTimer);
+  restrictionTimer = null;
+
+  if (isRestricted()) {
+    restrictionTimer = setInterval(renderRestriction, 250);
+  }
+
+  renderRestriction();
   checkActivity('startup');
 }
 
